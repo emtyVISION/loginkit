@@ -1,12 +1,12 @@
 <?php
-/**
- * Plugin Name: LoginKit
- * Plugin URI:  https://emty.vision
- * Description: Customise your WP-Login.
- * Version:     1.0
- * Author:      emtyVISION
- * Author URI:  https://emty.vision
- */
+/*
+Plugin Name: LoginKit
+Description: Login Customisation powered by emtyVISION
+Version: 1.1
+Author: emtyVISION
+Author URI: https://emty.vision
+GitHub URI: https://github.com/emtyvision/loginkit
+*/
 
 // Exit if accessed directly.
 if (!defined('ABSPATH')) {
@@ -279,5 +279,83 @@ function clp_custom_login_styles() {
     </style>
     <?php
 }
+
+class MyPluginUpdater {
+    private $slug; // Plugin slug
+    private $plugin; // Plugin path
+    private $githubAPIResult; // Github API result
+    private $accessToken; // Github private repo access token
+
+    function __construct() {
+        $this->slug = plugin_basename(__FILE__);
+        $this->plugin = get_plugin_data(__FILE__);
+        add_filter('pre_set_site_transient_update_plugins', array($this, 'check_for_update'));
+        add_filter('plugins_api', array($this, 'plugin_popup'), 10, 3);
+    }
+
+    // Check for update
+    public function check_for_update($transient) {
+        if (empty($transient->checked)) {
+            return $transient;
+        }
+        
+        // Get the plugin version from the transient
+        $remote_version = $this->get_remote_version();
+
+        // Check if there's a new version
+        if (version_compare($this->plugin['Version'], $remote_version, '<')) {
+            $transient->response[$this->slug] = (object) [
+                'slug'        => $this->slug,
+                'new_version' => $remote_version,
+                'package'     => $this->get_remote_zip_url(),
+                'url'         => $this->plugin['PluginURI']
+            ];
+        }
+
+        return $transient;
+    }
+
+    // Get the remote plugin version from the GitHub repository
+    private function get_remote_version() {
+        // Call GitHub API to get plugin data
+        $response = wp_remote_get('https://api.github.com/repos/emtyvision/loginkit/releases/latest');
+        if (!is_wp_error($response)) {
+            $release = json_decode(wp_remote_retrieve_body($response), true);
+            return $release['tag_name']; // Example: get tag version
+        }
+
+        return false;
+    }
+
+    // Get the URL to the ZIP file for the latest release
+    private function get_remote_zip_url() {
+        return 'https://github.com/emtyvision/loginkit/archive/refs/tags/v' . $this->get_remote_version() . '.zip';
+    }
+
+    // Plugin popup for WordPress admin (optional)
+    public function plugin_popup($result, $action, $args) {
+        if (!empty($args->slug) && $args->slug == $this->slug) {
+            $response = wp_remote_get('https://api.github.com/repos/emtyvision/loginkit');
+            if (!is_wp_error($response)) {
+                $info = json_decode(wp_remote_retrieve_body($response), true);
+                $result = (object) [
+                    'name'        => $info['name'],
+                    'slug'        => $this->slug,
+                    'version'     => $this->get_remote_version(),
+                    'download_link' => $this->get_remote_zip_url(),
+                ];
+            }
+        }
+        return $result;
+    }
+}
+
+if (is_admin()) {
+    $updater = new MyPluginUpdater();
+}
+
+
+?>
+
 
 
